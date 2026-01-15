@@ -9,7 +9,7 @@ export default function Home() {
   const [selectedStyle, setSelectedStyle] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
-  const [saved Ideas, setSavedIdeas] = useState([]);
+  const [savedIdeas, setSavedIdeas] = useState([]);
   const [error, setError] = useState('');
 
   // Load saved ideas
