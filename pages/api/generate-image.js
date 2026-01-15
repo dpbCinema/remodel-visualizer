@@ -42,8 +42,7 @@ export default async function handler(req, res) {
     formData.append('cfg_scale', '7');
     formData.append('samples', '1');
     formData.append('steps', '30');
-    formData.append('width', '1024');
-    formData.append('height', '1024');
+   
 
     const response = await fetch(
       'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
