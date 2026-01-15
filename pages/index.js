@@ -24,11 +24,10 @@ export default function Home() {
     }
   }, []);
 
- const handleCurrentRoomUpload = (event) => {
+const handleCurrentRoomUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Create image element to resize
     const img = new Image();
     const reader = new FileReader();
     
@@ -36,14 +35,31 @@ export default function Home() {
       img.src = e.target.result;
       
       img.onload = () => {
-        // Create canvas to resize to 1024x1024
+        // Calculate dimensions to fit within 1024x1024 while maintaining aspect ratio
+        let width = img.width;
+        let height = img.height;
+        const maxSize = 1024;
+        
+        if (width > height) {
+          if (width > maxSize) {
+            height = (height * maxSize) / width;
+            width = maxSize;
+          }
+        } else {
+          if (height > maxSize) {
+            width = (width * maxSize) / height;
+            height = maxSize;
+          }
+        }
+        
+        // Create canvas with calculated dimensions
         const canvas = document.createElement('canvas');
-        canvas.width = 1024;
-        canvas.height = 1024;
+        canvas.width = width;
+        canvas.height = height;
         const ctx = canvas.getContext('2d');
         
-        // Draw resized image
-        ctx.drawImage(img, 0, 0, 1024, 1024);
+        // Draw resized image maintaining aspect ratio
+        ctx.drawImage(img, 0, 0, width, height);
         
         // Get resized image as data URL
         const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
@@ -55,6 +71,7 @@ export default function Home() {
     };
     
     reader.readAsDataURL(file);
+  };
   };
 
   const handleInspirationUpload = (event) => {
