@@ -20,29 +20,33 @@ export default async function handler(req, res) {
 
     const imageBuffer = Buffer.from(currentRoom, 'base64');
 
-    // Calculate image_strength based on intensity (lower = more change)
-    // 0.5 intensity = 0.25 strength (moderate change)
-    // 0.8 intensity = 0.15 strength (dramatic change)
-    // 0.2 intensity = 0.45 strength (subtle change)
-    const imageStrength = Math.max(0.15, Math.min(0.5, 0.5 - (intensity * 0.35)));
+    // Calculate image_strength based on mode and intensity
+    let imageStrength;
+    if (mode === 'staging') {
+      // Staging: Keep more of original (0.5-0.7) to preserve the room structure
+      imageStrength = Math.max(0.5, Math.min(0.7, 0.7 - (intensity * 0.2)));
+    } else {
+      // Remodel: Lower strength for dramatic changes (0.15-0.5)
+      imageStrength = Math.max(0.15, Math.min(0.5, 0.5 - (intensity * 0.35)));
+    }
 
     let fullPrompt = '';
 
     if (mode === 'staging') {
-      // Staging mode: Add furniture and decor
+      // Staging mode: Add furniture and decor while keeping the existing room
       const stagingPrompts = {
-        'modern minimalist': 'beautifully staged with modern minimalist furniture, sleek sofa, minimalist coffee table, contemporary art, neutral tones, designer lighting',
-        'traditional': 'elegantly staged with traditional furniture, classic sofa, ornate coffee table, decorative accessories, warm lighting, rich textures',
-        'contemporary': 'professionally staged with contemporary furniture, stylish seating, modern decor, accent pieces, balanced color palette',
-        'rustic farmhouse': 'warmly staged with farmhouse furniture, comfortable sofa, rustic wood table, vintage accessories, cozy textiles, warm lighting',
-        'industrial': 'stylishly staged with industrial furniture, leather seating, metal accents, exposed elements, urban accessories, Edison bulbs',
-        'scandinavian': 'cozily staged with Scandinavian furniture, light wood pieces, white and gray textiles, minimal decor, natural light, hygge atmosphere',
-        'mediterranean': 'beautifully staged with Mediterranean furniture, terracotta accents, warm textiles, arched details, natural materials',
-        'luxury': 'luxuriously staged with high-end furniture, designer pieces, premium fabrics, elegant accessories, sophisticated lighting, upscale finishes'
+        'modern minimalist': 'add modern minimalist furniture and decor to this space, sleek contemporary sofa, minimalist coffee table, modern art on walls, neutral throw pillows, designer lighting fixtures, keep existing room structure and walls',
+        'traditional': 'add traditional elegant furniture and decor to this space, classic sofa, ornate wooden coffee table, traditional rug, decorative accessories, warm lighting, keep existing room structure and walls',
+        'contemporary': 'add contemporary furniture and decor to this space, stylish modern seating, contemporary coffee table, modern art, accent pieces, keep existing room structure and walls',
+        'rustic farmhouse': 'add rustic farmhouse furniture and decor to this space, comfortable farmhouse sofa, rustic wood coffee table, vintage accessories, cozy textiles, keep existing room structure and walls',
+        'industrial': 'add industrial furniture and decor to this space, leather seating, metal and wood coffee table, industrial accessories, Edison bulb lighting, keep existing room structure and walls',
+        'scandinavian': 'add Scandinavian furniture and decor to this space, light wood pieces, white and gray textiles, minimal decor, cozy throw blankets, keep existing room structure and walls',
+        'mediterranean': 'add Mediterranean furniture and decor to this space, warm textiles, terracotta accents, natural materials, decorative pottery, keep existing room structure and walls',
+        'luxury': 'add luxury high-end furniture and decor to this space, designer sofa, premium fabrics, elegant accessories, sophisticated lighting, keep existing room structure and walls'
       };
 
       const stagingStyle = stagingPrompts[style] || stagingPrompts['modern minimalist'];
-      fullPrompt = `Professional interior design staging photo, ${stagingStyle}, magazine quality, 8k resolution, photorealistic, professional real estate photography`;
+      fullPrompt = `Professional interior design staging, ${stagingStyle}, add furniture and decor only, preserve existing architecture and room structure, magazine quality, photorealistic`;
       
     } else {
       // Remodeling mode: Transform the space
@@ -143,4 +147,3 @@ export const config = {
     },
   },
 };
-
