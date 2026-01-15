@@ -1,464 +1,145 @@
-import { useState, useEffect } from 'react';
-import Head from 'next/head';
+export default async function handler(req, res) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-export default function Home() {
-  const [step, setStep] = useState('welcome');
-  const [currentRoomImage, setCurrentRoomImage] = useState(null);
-  const [currentRoomData, setCurrentRoomData] = useState(null);
-  const [inspirationImage, setInspirationImage] = useState(null);
-  const [selectedStyle, setSelectedStyle] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImage, setGeneratedImage] = useState(null);
-  const [savedIdeas, setSavedIdeas] = useState([]);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    const saved = localStorage.getItem('savedIdeas');
-    if (saved) {
-      try {
-        setSavedIdeas(JSON.parse(saved));
-      } catch (e) {
-        console.log('Error loading saved ideas');
-      }
-    }
-  }, []);
-
-  const handleCurrentRoomUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const img = new Image();
-    const reader = new FileReader();
+  try {
+    const { 
+      currentRoom, 
+      style, 
+      mode = 'remodel', // 'remodel' or 'staging'
+      intensity = 0.5, // 0 = subtle, 1 = dramatic
+      changes = [] // array of specific changes: ['island', 'cabinets', 'walls', etc.]
+    } = req.body;
     
-    reader.onload = (e) => {
-      img.src = e.target.result;
-      
-      img.onload = () => {
-        // Allowed dimensions for Stable Diffusion XL
-        const allowedDimensions = [
-          [1024, 1024],
-          [1152, 896],
-          [1216, 832],
-          [1344, 768],
-          [1536, 640],
-          [640, 1536],
-          [768, 1344],
-          [832, 1216],
-          [896, 1152]
-        ];
-        
-        // Calculate aspect ratio of uploaded image
-        const aspectRatio = img.width / img.height;
-        
-        // Find closest allowed dimension that matches aspect ratio
-        let bestMatch = allowedDimensions[0];
-        let bestDiff = Math.abs((allowedDimensions[0][0] / allowedDimensions[0][1]) - aspectRatio);
-        
-        for (const dim of allowedDimensions) {
-          const dimRatio = dim[0] / dim[1];
-          const diff = Math.abs(dimRatio - aspectRatio);
-          if (diff < bestDiff) {
-            bestDiff = diff;
-            bestMatch = dim;
-          }
-        }
-        
-        const [width, height] = bestMatch;
-        
-        // Create canvas with the best matching allowed dimensions
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        
-        // Draw image - slight crop may occur but NO squishing
-        const scale = Math.max(width / img.width, height / img.height);
-        const scaledWidth = img.width * scale;
-        const scaledHeight = img.height * scale;
-        const x = (width - scaledWidth) / 2;
-        const y = (height - scaledHeight) / 2;
-        
-        ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
-        
-        const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
-        setCurrentRoomImage(resizedDataUrl);
-        setCurrentRoomData(resizedDataUrl.split(',')[1]);
+    const apiKey = process.env.STABILITY_API_KEY;
+
+    if (!apiKey) {
+      return res.status(500).json({ error: 'API key not configured' });
+    }
+
+    const imageBuffer = Buffer.from(currentRoom, 'base64');
+
+    // Calculate image_strength based on intensity (lower = more change)
+    // 0.5 intensity = 0.25 strength (moderate change)
+    // 0.8 intensity = 0.15 strength (dramatic change)
+    // 0.2 intensity = 0.45 strength (subtle change)
+    const imageStrength = Math.max(0.15, Math.min(0.5, 0.5 - (intensity * 0.35)));
+
+    let fullPrompt = '';
+
+    if (mode === 'staging') {
+      // Staging mode: Add furniture and decor
+      const stagingPrompts = {
+        'modern minimalist': 'beautifully staged with modern minimalist furniture, sleek sofa, minimalist coffee table, contemporary art, neutral tones, designer lighting',
+        'traditional': 'elegantly staged with traditional furniture, classic sofa, ornate coffee table, decorative accessories, warm lighting, rich textures',
+        'contemporary': 'professionally staged with contemporary furniture, stylish seating, modern decor, accent pieces, balanced color palette',
+        'rustic farmhouse': 'warmly staged with farmhouse furniture, comfortable sofa, rustic wood table, vintage accessories, cozy textiles, warm lighting',
+        'industrial': 'stylishly staged with industrial furniture, leather seating, metal accents, exposed elements, urban accessories, Edison bulbs',
+        'scandinavian': 'cozily staged with Scandinavian furniture, light wood pieces, white and gray textiles, minimal decor, natural light, hygge atmosphere',
+        'mediterranean': 'beautifully staged with Mediterranean furniture, terracotta accents, warm textiles, arched details, natural materials',
+        'luxury': 'luxuriously staged with high-end furniture, designer pieces, premium fabrics, elegant accessories, sophisticated lighting, upscale finishes'
       };
-    };
-    
-    reader.readAsDataURL(file);
-  };
 
-  const handleInspirationUpload = (event) => {
-    const file = event.target.files[0];
-    if (!file) return;
+      const stagingStyle = stagingPrompts[style] || stagingPrompts['modern minimalist'];
+      fullPrompt = `Professional interior design staging photo, ${stagingStyle}, magazine quality, 8k resolution, photorealistic, professional real estate photography`;
+      
+    } else {
+      // Remodeling mode: Transform the space
+      const stylePrompts = {
+        'modern minimalist': 'complete modern minimalist kitchen renovation, sleek white flat-panel cabinets, quartz countertops, minimalist hardware, subway tile backsplash, stainless appliances, recessed lighting',
+        'traditional': 'complete traditional kitchen remodel, raised panel wood cabinets, granite countertops, ornate hardware, classic tile backsplash, warm wood tones, pendant lighting',
+        'contemporary': 'complete contemporary kitchen transformation, two-tone cabinets, waterfall countertops, modern hardware, geometric backsplash, integrated appliances, track lighting',
+        'rustic farmhouse': 'complete farmhouse kitchen renovation, shaker cabinets, butcher block counters, vintage hardware, subway tile, farmhouse sink, open shelving, pendant lights',
+        'industrial': 'complete industrial kitchen remodel, dark cabinets, concrete countertops, exposed hardware, brick backsplash, stainless appliances, exposed ductwork, industrial pendant lights',
+        'scandinavian': 'complete Scandinavian kitchen transformation, light wood cabinets, white countertops, minimalist hardware, white tile, integrated appliances, natural light',
+        'mediterranean': 'complete Mediterranean kitchen renovation, warm wood cabinets, terra cotta accents, decorative tile backsplash, arched details, warm lighting',
+        'luxury': 'complete luxury kitchen remodel, custom high-end cabinets, marble countertops, designer hardware, premium tile, professional appliances, statement lighting'
+      };
 
-    const reader = new FileReader();
-    reader.onload = (e) => setInspirationImage(e.target.result);
-    reader.readAsDataURL(file);
-  };
+      let stylePrompt = stylePrompts[style] || stylePrompts['modern minimalist'];
 
-  const generateVisualization = async () => {
-    setIsGenerating(true);
-    setError('');
-    setStep('generating');
+      // Add specific changes to prompt
+      if (changes && changes.length > 0) {
+        const changePrompts = {
+          'island': 'large kitchen island with seating, waterfall countertop',
+          'cabinets': 'completely new cabinet design and color',
+          'walls': 'opened up walls, removed barriers, open floor plan',
+          'flooring': 'new modern flooring throughout',
+          'lighting': 'upgraded modern lighting fixtures, pendant lights, recessed lighting',
+          'backsplash': 'stunning new backsplash design',
+          'countertops': 'premium new countertop material and design',
+          'appliances': 'new high-end stainless steel appliances'
+        };
 
-    try {
-      const response = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          currentRoom: currentRoomData,
-          style: selectedStyle
-        })
-      });
+        const selectedChanges = changes
+          .filter(change => changePrompts[change])
+          .map(change => changePrompts[change])
+          .join(', ');
 
-      const data = await response.json();
-
-      if (data.success && data.image) {
-        setGeneratedImage(data.image);
-        setStep('results');
-      } else {
-        throw new Error(data.error || 'Failed to generate');
+        if (selectedChanges) {
+          stylePrompt += `, ${selectedChanges}`;
+        }
       }
-    } catch (err) {
-      setError(err.message);
-      setStep('style');
-    } finally {
-      setIsGenerating(false);
+
+      fullPrompt = `Professional interior design photo, complete renovation, ${stylePrompt}, dramatic transformation, magazine quality, architectural digest, 8k resolution, photorealistic`;
     }
-  };
 
-  const saveIdea = () => {
-    const idea = {
-      id: Date.now(),
-      currentRoom: currentRoomImage,
-      inspiration: inspirationImage,
-      result: generatedImage,
-      style: selectedStyle,
-      date: new Date().toISOString()
-    };
-    const updated = [...savedIdeas, idea];
-    setSavedIdeas(updated);
-    localStorage.setItem('savedIdeas', JSON.stringify(updated));
-    alert('💾 Idea saved!');
-  };
+    // Create form data
+    const formData = new FormData();
+    formData.append('init_image', new Blob([imageBuffer], { type: 'image/jpeg' }));
+    formData.append('init_image_mode', 'IMAGE_STRENGTH');
+    formData.append('image_strength', imageStrength.toString());
+    formData.append('text_prompts[0][text]', fullPrompt);
+    formData.append('text_prompts[0][weight]', '1');
+    formData.append('text_prompts[1][text]', 'blurry, bad quality, distorted, ugly, deformed, cluttered, messy, dirty');
+    formData.append('text_prompts[1][weight]', '-1');
+    formData.append('cfg_scale', '8');
+    formData.append('samples', '1');
+    formData.append('steps', '50');
 
-  const deleteSavedIdea = (id) => {
-    const updated = savedIdeas.filter(idea => idea.id !== id);
-    setSavedIdeas(updated);
-    localStorage.setItem('savedIdeas', JSON.stringify(updated));
-  };
+    const response = await fetch(
+      'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
+      {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: formData,
+      }
+    );
 
-  const startOver = () => {
-    setCurrentRoomImage(null);
-    setCurrentRoomData(null);
-    setInspirationImage(null);
-    setGeneratedImage(null);
-    setSelectedStyle('');
-    setError('');
-    setStep('upload');
-  };
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || `API Error: ${response.status}`);
+    }
 
-  const tryDifferentStyle = () => {
-    setGeneratedImage(null);
-    setSelectedStyle('');
-    setError('');
-    setStep('style');
-  };
+    const data = await response.json();
 
-  const styles = [
-    { value: 'modern minimalist', label: 'Modern Minimalist', emoji: '⬜' },
-    { value: 'traditional', label: 'Traditional', emoji: '🏛️' },
-    { value: 'contemporary', label: 'Contemporary', emoji: '🎨' },
-    { value: 'rustic farmhouse', label: 'Rustic Farmhouse', emoji: '🌾' },
-    { value: 'industrial', label: 'Industrial', emoji: '🏭' },
-    { value: 'scandinavian', label: 'Scandinavian', emoji: '❄️' },
-    { value: 'mediterranean', label: 'Mediterranean', emoji: '🌊' },
-    { value: 'luxury', label: 'Luxury', emoji: '💎' },
-  ];
+    if (data.artifacts && data.artifacts.length > 0) {
+      const imageData = data.artifacts[0].base64;
+      return res.status(200).json({ 
+        image: `data:image/png;base64,${imageData}`,
+        success: true 
+      });
+    } else {
+      throw new Error('No image generated');
+    }
 
-  return (
-    <>
-      <Head>
-        <title>Remodel Vision Tool</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
-
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100">
-        {step === 'welcome' && (
-          <div className="p-6">
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-8 text-white text-center">
-                  <div className="text-6xl mb-4">🏠✨</div>
-                  <h1 className="text-4xl font-bold mb-3">Remodel Vision Tool</h1>
-                  <p className="text-xl text-blue-100">See YOUR space transformed</p>
-                </div>
-
-                <div className="p-8">
-                  <h2 className="text-2xl font-bold text-slate-800 mb-6 text-center">How It Works</h2>
-                  
-                  <div className="space-y-6 mb-8">
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-2xl mr-4">📸</div>
-                      <div>
-                        <h3 className="font-semibold text-lg text-slate-800 mb-1">Step 1: Upload Your Room</h3>
-                        <p className="text-slate-600">Take a photo of your current space</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center text-2xl mr-4">💡</div>
-                      <div>
-                        <h3 className="font-semibold text-lg text-slate-800 mb-1">Step 2: Add Inspiration</h3>
-                        <p className="text-slate-600">Upload a style you found online</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-start">
-                      <div className="flex-shrink-0 w-12 h-12 bg-green-100 rounded-full flex items-center justify-center text-2xl mr-4">🎨</div>
-                      <div>
-                        <h3 className="font-semibold text-lg text-slate-800 mb-1">Step 3: See the Magic</h3>
-                        <p className="text-slate-600">AI shows what your space would look like</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  <button
-                    onClick={() => setStep('upload')}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-5 px-6 rounded-xl text-xl shadow-lg transition-all"
-                  >
-                    🚀 Start Visualizing
-                  </button>
-
-                  {savedIdeas.length > 0 && (
-                    <button
-                      onClick={() => setStep('saved')}
-                      className="w-full mt-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold py-4 px-6 rounded-xl transition-all"
-                    >
-                      📂 View Saved Ideas ({savedIdeas.length})
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 'upload' && (
-          <div className="p-4">
-            <div className="max-w-4xl mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold text-slate-800">Upload Photos</h1>
-                <button onClick={() => setStep('welcome')} className="text-slate-600">← Back</button>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-                <h2 className="text-xl font-semibold text-slate-800 mb-4">📸 Your Current Room</h2>
-                <div
-                  onClick={() => document.getElementById('currentRoomInput').click()}
-                  className="border-3 border-dashed border-blue-300 rounded-xl p-8 text-center cursor-pointer bg-blue-50 hover:border-blue-500 transition-colors"
-                >
-                  <input
-                    type="file"
-                    id="currentRoomInput"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={handleCurrentRoomUpload}
-                  />
-                  {!currentRoomImage ? (
-                    <>
-                      <div className="text-5xl mb-3">📷</div>
-                      <p className="text-slate-700 font-medium">Tap to take or upload photo</p>
-                    </>
-                  ) : (
-                    <>
-                      <img src={currentRoomImage} alt="Current" className="max-h-64 mx-auto rounded-lg shadow-md mb-3" />
-                      <p className="text-sm text-green-600 font-medium">✓ Photo uploaded!</p>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-                <h2 className="text-xl font-semibold text-slate-800 mb-4">💡 Your Inspiration</h2>
-                <div
-                  onClick={() => document.getElementById('inspirationInput').click()}
-                  className="border-3 border-dashed border-purple-300 rounded-xl p-8 text-center cursor-pointer bg-purple-50 hover:border-purple-500 transition-colors"
-                >
-                  <input
-                    type="file"
-                    id="inspirationInput"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleInspirationUpload}
-                  />
-                  {!inspirationImage ? (
-                    <>
-                      <div className="text-5xl mb-3">✨</div>
-                      <p className="text-slate-700 font-medium">Tap to upload inspiration</p>
-                    </>
-                  ) : (
-                    <>
-                      <img src={inspirationImage} alt="Inspiration" className="max-h-64 mx-auto rounded-lg shadow-md mb-3" />
-                      <p className="text-sm text-green-600 font-medium">✓ Inspiration uploaded!</p>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {currentRoomImage && inspirationImage && (
-                <button
-                  onClick={() => setStep('style')}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-5 rounded-xl shadow-lg transition-all"
-                >
-                  Continue to Style Options →
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {step === 'style' && (
-          <div className="p-4">
-            <div className="max-w-4xl mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <h1 className="text-2xl font-bold text-slate-800">Choose Style</h1>
-                <button onClick={() => setStep('upload')} className="text-slate-600">← Back</button>
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded">
-                  <p className="text-red-800">{error}</p>
-                </div>
-              )}
-
-              <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-                <h2 className="text-xl font-semibold text-slate-800 mb-4">🎨 Pick Your Style</h2>
-                <div className="grid grid-cols-2 gap-3">
-                  {styles.map((style) => (
-                    <button
-                      key={style.value}
-                      onClick={() => setSelectedStyle(style.value)}
-                      className={`p-4 rounded-xl border-2 text-left transition-all ${
-                        selectedStyle === style.value
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-slate-200 hover:border-blue-300'
-                      }`}
-                    >
-                      <div className="text-3xl mb-2">{style.emoji}</div>
-                      <div className="font-semibold text-slate-800">{style.label}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {selectedStyle && (
-                <button
-                  onClick={generateVisualization}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-5 rounded-xl shadow-lg transition-all"
-                >
-                  ✨ Generate Visualization
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {step === 'generating' && (
-          <div className="p-4 flex items-center justify-center min-h-screen">
-            <div className="bg-white rounded-2xl shadow-2xl p-12 text-center max-w-md">
-              <div className="animate-spin rounded-full h-20 w-20 border-b-4 border-blue-600 mx-auto mb-6"></div>
-              <h2 className="text-3xl font-bold text-slate-800 mb-4">Creating Your Vision...</h2>
-              <p className="text-slate-600">This takes 30-60 seconds</p>
-            </div>
-          </div>
-        )}
-
-        {step === 'results' && (
-          <div className="p-4">
-            <div className="max-w-6xl mx-auto">
-              <h1 className="text-3xl font-bold text-slate-800 mb-6 text-center">🎉 Here's Your Vision!</h1>
-
-              <div className="bg-white rounded-2xl shadow-2xl overflow-hidden mb-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-6">
-                  <div>
-                    <h3 className="font-semibold text-slate-700 mb-3 text-center">Current</h3>
-                    <img src={currentRoomImage} alt="Current" className="w-full rounded-lg shadow-md" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-slate-700 mb-3 text-center">Inspiration</h3>
-                    <img src={inspirationImage} alt="Inspiration" className="w-full rounded-lg shadow-md" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-slate-700 mb-3 text-center">Your Vision</h3>
-                    <img src={generatedImage} alt="Generated" className="w-full rounded-lg shadow-md" />
-                  </div>
-                </div>
-
-                <div className="p-6 bg-slate-50 border-t grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <button onClick={saveIdea} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-4 rounded-xl transition-all">
-                    💾 Save This Idea
-                  </button>
-                  <button onClick={tryDifferentStyle} className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl transition-all">
-                    🔄 Try Another Style
-                  </button>
-                  <button onClick={() => setStep('welcome')} className="bg-slate-600 hover:bg-slate-700 text-white font-semibold py-4 rounded-xl transition-all">
-                    🏠 Start New
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {step === 'saved' && (
-          <div className="p-4">
-            <div className="max-w-6xl mx-auto">
-              <div className="flex items-center justify-between mb-6">
-                <h1 className="text-3xl font-bold text-slate-800">My Saved Ideas</h1>
-                <button onClick={() => setStep('welcome')} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-all">← Back</button>
-              </div>
-
-              {savedIdeas.length === 0 ? (
-                <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-                  <div className="text-6xl mb-4">📭</div>
-                  <h2 className="text-2xl font-semibold text-slate-800 mb-3">No saved ideas yet</h2>
-                  <button
-                    onClick={() => setStep('upload')}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg mt-4 transition-all"
-                  >
-                    Create Your First Idea
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {savedIdeas.map((idea) => (
-                    <div key={idea.id} className="bg-white rounded-xl shadow-lg overflow-hidden">
-                      <div className="grid grid-cols-3 gap-2 p-3">
-                        <img src={idea.currentRoom} alt="Current" className="w-full rounded" />
-                        <img src={idea.inspiration} alt="Inspiration" className="w-full rounded" />
-                        <img src={idea.result} alt="Result" className="w-full rounded" />
-                      </div>
-                      <div className="p-4 border-t">
-                        <p className="text-sm text-slate-600 mb-3">{new Date(idea.date).toLocaleDateString()}</p>
-                        <button
-                          onClick={() => deleteSavedIdea(idea.id)}
-                          className="text-red-600 hover:text-red-700 text-sm font-medium transition-colors"
-                        >
-                          🗑️ Delete
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-    </>
-  );
+  } catch (error) {
+    console.error('Generation error:', error);
+    return res.status(500).json({ 
+      error: error.message || 'Failed to generate image',
+      success: false 
+    });
+  }
 }
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb',
+    },
+  },
+};
