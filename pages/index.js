@@ -124,4 +124,5 @@ export default function Home() {
   const deleteSavedIdea = (id) => {
     const updated = savedIdeas.filter(idea => idea.id !== id);
     setSavedIdeas(updated);
-   localStorage.setItem('savedIdeas', JSON.stringify(updated));
+  localStorage.setItem('savedIdeas', JSON.stringify(updated));
+  };
