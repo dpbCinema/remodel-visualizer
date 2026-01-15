@@ -7,9 +7,12 @@ export default async function handler(req, res) {
     const { 
       currentRoom, 
       style, 
-      mode = 'remodel', // 'remodel' or 'staging'
-      intensity = 0.5, // 0 = subtle, 1 = dramatic
-      changes = [] // array of specific changes: ['island', 'cabinets', 'walls', etc.]
+      mode = 'remodel',
+      intensity = 0.7,
+      changes = [],
+      cabinetColor = '',
+      countertopMaterial = '',
+      wallColor = ''
     } = req.body;
     
     const apiKey = process.env.STABILITY_API_KEY;
@@ -23,57 +26,95 @@ export default async function handler(req, res) {
     // Calculate image_strength based on mode and intensity
     let imageStrength;
     if (mode === 'staging') {
-      // Staging: Keep more of original (0.5-0.7) to preserve the room structure
-      imageStrength = Math.max(0.5, Math.min(0.7, 0.7 - (intensity * 0.2)));
+      // Staging: Keep more of original (0.55-0.75) to preserve the room
+      imageStrength = Math.max(0.55, Math.min(0.75, 0.75 - (intensity * 0.2)));
     } else {
-      // Remodel: Lower strength for dramatic changes (0.15-0.5)
-      imageStrength = Math.max(0.15, Math.min(0.5, 0.5 - (intensity * 0.35)));
+      // Remodel: VERY LOW for dramatic changes (0.08-0.30)
+      imageStrength = Math.max(0.08, Math.min(0.30, 0.30 - (intensity * 0.22)));
     }
 
     let fullPrompt = '';
+    let negativePrompt = 'blurry, bad quality, distorted, ugly, deformed, cluttered, messy, dirty, extra appliances, duplicate refrigerators, multiple stoves, extra sinks, warped cabinets, crooked walls, unrealistic proportions';
 
     if (mode === 'staging') {
-      // Staging mode: Add furniture and decor while keeping the existing room
       const stagingPrompts = {
-        'modern minimalist': 'add modern minimalist furniture and decor to this space, sleek contemporary sofa, minimalist coffee table, modern art on walls, neutral throw pillows, designer lighting fixtures, keep existing room structure and walls',
-        'traditional': 'add traditional elegant furniture and decor to this space, classic sofa, ornate wooden coffee table, traditional rug, decorative accessories, warm lighting, keep existing room structure and walls',
-        'contemporary': 'add contemporary furniture and decor to this space, stylish modern seating, contemporary coffee table, modern art, accent pieces, keep existing room structure and walls',
-        'rustic farmhouse': 'add rustic farmhouse furniture and decor to this space, comfortable farmhouse sofa, rustic wood coffee table, vintage accessories, cozy textiles, keep existing room structure and walls',
-        'industrial': 'add industrial furniture and decor to this space, leather seating, metal and wood coffee table, industrial accessories, Edison bulb lighting, keep existing room structure and walls',
-        'scandinavian': 'add Scandinavian furniture and decor to this space, light wood pieces, white and gray textiles, minimal decor, cozy throw blankets, keep existing room structure and walls',
-        'mediterranean': 'add Mediterranean furniture and decor to this space, warm textiles, terracotta accents, natural materials, decorative pottery, keep existing room structure and walls',
-        'luxury': 'add luxury high-end furniture and decor to this space, designer sofa, premium fabrics, elegant accessories, sophisticated lighting, keep existing room structure and walls'
+        'modern minimalist': 'add modern minimalist furniture and decor to this existing space, sleek contemporary sofa, minimalist coffee table, modern art on walls, neutral throw pillows, designer lighting, preserve existing room structure',
+        'traditional': 'add traditional elegant furniture and decor to this existing space, classic sofa, ornate wooden coffee table, traditional area rug, decorative accessories, preserve existing room structure',
+        'contemporary': 'add contemporary stylish furniture and decor to this existing space, modern seating, contemporary coffee table, modern art pieces, preserve existing room structure',
+        'rustic farmhouse': 'add rustic farmhouse furniture and decor to this existing space, comfortable farmhouse sofa, rustic wood coffee table, vintage accessories, cozy textiles, preserve existing room structure',
+        'industrial': 'add industrial furniture and decor to this existing space, leather seating, metal and wood coffee table, industrial accessories, Edison bulb lighting, preserve existing room structure',
+        'scandinavian': 'add Scandinavian furniture and decor to this existing space, light wood pieces, white and gray textiles, minimal hygge decor, preserve existing room structure',
+        'mediterranean': 'add Mediterranean furniture and decor to this existing space, warm textiles, terracotta accents, natural materials, decorative pottery, preserve existing room structure',
+        'luxury': 'add luxury high-end furniture and decor to this existing space, designer sofa, premium fabrics, elegant accessories, sophisticated lighting, preserve existing room structure'
       };
 
       const stagingStyle = stagingPrompts[style] || stagingPrompts['modern minimalist'];
-      fullPrompt = `Professional interior design staging, ${stagingStyle}, add furniture and decor only, preserve existing architecture and room structure, magazine quality, photorealistic`;
+      fullPrompt = `Professional interior staging photography, ${stagingStyle}, only add furniture and decorative items, keep all existing walls floors and architecture intact, photorealistic, 8k, magazine quality`;
       
     } else {
-      // Remodeling mode: Transform the space
+      // REMODEL MODE - Build detailed transformation prompt
+      let transformationDetails = [];
+      
+      // Cabinet color specification
+      if (cabinetColor) {
+        const cabinetDescriptions = {
+          'white': 'bright white painted shaker cabinets with modern hardware',
+          'navy': 'deep navy blue painted cabinets with brass hardware',
+          'gray': 'soft gray painted cabinets with chrome hardware',
+          'light-wood': 'natural light oak wood cabinets with simple pulls',
+          'dark-wood': 'rich dark walnut wood cabinets with traditional hardware'
+        };
+        transformationDetails.push(cabinetDescriptions[cabinetColor] || 'new modern cabinets');
+      }
+      
+      // Countertop material
+      if (countertopMaterial) {
+        const countertopDescriptions = {
+          'quartz': 'pristine white quartz countertops with subtle veining',
+          'granite': 'polished granite countertops with natural stone patterns',
+          'marble': 'luxurious white marble countertops with gray veining',
+          'butcher-block': 'warm butcher block wood countertops',
+          'concrete': 'modern concrete countertops with smooth finish'
+        };
+        transformationDetails.push(countertopDescriptions[countertopMaterial] || 'premium countertops');
+      }
+      
+      // Wall color
+      if (wallColor) {
+        const wallDescriptions = {
+          'white': 'crisp white walls',
+          'gray': 'soft gray walls',
+          'beige': 'warm beige walls',
+          'blue': 'sophisticated blue-gray walls'
+        };
+        transformationDetails.push(wallDescriptions[wallColor] || 'freshly painted walls');
+      }
+
+      // Base style prompts
       const stylePrompts = {
-        'modern minimalist': 'complete modern minimalist kitchen renovation, sleek white flat-panel cabinets, quartz countertops, minimalist hardware, subway tile backsplash, stainless appliances, recessed lighting',
-        'traditional': 'complete traditional kitchen remodel, raised panel wood cabinets, granite countertops, ornate hardware, classic tile backsplash, warm wood tones, pendant lighting',
-        'contemporary': 'complete contemporary kitchen transformation, two-tone cabinets, waterfall countertops, modern hardware, geometric backsplash, integrated appliances, track lighting',
-        'rustic farmhouse': 'complete farmhouse kitchen renovation, shaker cabinets, butcher block counters, vintage hardware, subway tile, farmhouse sink, open shelving, pendant lights',
-        'industrial': 'complete industrial kitchen remodel, dark cabinets, concrete countertops, exposed hardware, brick backsplash, stainless appliances, exposed ductwork, industrial pendant lights',
-        'scandinavian': 'complete Scandinavian kitchen transformation, light wood cabinets, white countertops, minimalist hardware, white tile, integrated appliances, natural light',
-        'mediterranean': 'complete Mediterranean kitchen renovation, warm wood cabinets, terra cotta accents, decorative tile backsplash, arched details, warm lighting',
-        'luxury': 'complete luxury kitchen remodel, custom high-end cabinets, marble countertops, designer hardware, premium tile, professional appliances, statement lighting'
+        'modern minimalist': 'complete modern minimalist kitchen renovation, clean lines, flat-panel cabinetry, sleek hardware, subway tile backsplash, stainless steel appliances, recessed lighting, open layout',
+        'traditional': 'complete traditional kitchen remodel, raised panel wood cabinetry, ornate hardware, classic tile backsplash, warm tones, crown molding, pendant lighting over island',
+        'contemporary': 'complete contemporary kitchen transformation, two-tone cabinetry, waterfall countertop edges, modern hardware, geometric tile backsplash, integrated appliances, linear lighting',
+        'rustic farmhouse': 'complete farmhouse kitchen renovation, shaker style cabinets, farmhouse sink, open shelving, subway tile, butcher block accents, industrial pendant lights, ship lap walls',
+        'industrial': 'complete industrial kitchen remodel, dark cabinetry, exposed elements, brick or concrete backsplash, stainless appliances, metal hardware, exposed beam ceiling, industrial pendant lights',
+        'scandinavian': 'complete Scandinavian kitchen transformation, light wood cabinetry, white surfaces, minimalist hardware, simple tile, integrated appliances, abundant natural light, pendant lights',
+        'mediterranean': 'complete Mediterranean kitchen renovation, warm wood cabinets, terra cotta tile accents, decorative backsplash, arched details, wrought iron hardware, warm pendant lighting',
+        'luxury': 'complete luxury kitchen remodel, custom high-end cabinetry, premium stone countertops, designer tile backsplash, professional grade appliances, under-cabinet lighting, crystal chandeliers'
       };
 
-      let stylePrompt = stylePrompts[style] || stylePrompts['modern minimalist'];
-
-      // Add specific changes to prompt
+      let basePrompt = stylePrompts[style] || stylePrompts['modern minimalist'];
+      
+      // Add specific changes
       if (changes && changes.length > 0) {
         const changePrompts = {
-          'island': 'large kitchen island with seating, waterfall countertop',
-          'cabinets': 'completely new cabinet design and color',
-          'walls': 'opened up walls, removed barriers, open floor plan',
-          'flooring': 'new modern flooring throughout',
-          'lighting': 'upgraded modern lighting fixtures, pendant lights, recessed lighting',
-          'backsplash': 'stunning new backsplash design',
-          'countertops': 'premium new countertop material and design',
-          'appliances': 'new high-end stainless steel appliances'
+          'island': 'large center island with seating for 4, waterfall edge countertop',
+          'cabinets': 'completely replace all cabinets with new design and color',
+          'walls': 'open floor plan, removed walls, expanded space, open concept layout',
+          'flooring': 'new wide-plank hardwood flooring throughout',
+          'lighting': 'modern recessed lighting, statement pendant lights over island',
+          'backsplash': 'floor to ceiling designer tile backsplash',
+          'countertops': 'all new premium countertops with waterfall edges',
+          'appliances': 'brand new stainless steel professional appliances'
         };
 
         const selectedChanges = changes
@@ -82,11 +123,16 @@ export default async function handler(req, res) {
           .join(', ');
 
         if (selectedChanges) {
-          stylePrompt += `, ${selectedChanges}`;
+          transformationDetails.push(selectedChanges);
         }
       }
 
-      fullPrompt = `Professional interior design photo, complete renovation, ${stylePrompt}, dramatic transformation, magazine quality, architectural digest, 8k resolution, photorealistic`;
+      // Combine everything
+      const detailsString = transformationDetails.length > 0 ? `, ${transformationDetails.join(', ')}` : '';
+      fullPrompt = `Professional architectural photography of completely renovated kitchen, ${basePrompt}${detailsString}, dramatic before and after transformation, magazine quality, architectural digest, 8k resolution, photorealistic, professional lighting, wide angle`;
+      
+      // Stronger negative prompt for remodel
+      negativePrompt += ', unchanged kitchen, no transformation, same cabinets, old kitchen, minimal changes, subtle changes, small changes';
     }
 
     // Create form data
@@ -96,9 +142,9 @@ export default async function handler(req, res) {
     formData.append('image_strength', imageStrength.toString());
     formData.append('text_prompts[0][text]', fullPrompt);
     formData.append('text_prompts[0][weight]', '1');
-    formData.append('text_prompts[1][text]', 'blurry, bad quality, distorted, ugly, deformed, cluttered, messy, dirty');
+    formData.append('text_prompts[1][text]', negativePrompt);
     formData.append('text_prompts[1][weight]', '-1');
-    formData.append('cfg_scale', '8');
+    formData.append('cfg_scale', '9');
     formData.append('samples', '1');
     formData.append('steps', '50');
 
