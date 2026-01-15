@@ -9,6 +9,9 @@ export default function Home() {
   const [selectedStyle, setSelectedStyle] = useState('');
   const [intensity, setIntensity] = useState(0.7);
   const [selectedChanges, setSelectedChanges] = useState([]);
+  const [cabinetColor, setCabinetColor] = useState('');
+  const [countertopMaterial, setCountertopMaterial] = useState('');
+  const [wallColor, setWallColor] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState(null);
   const [savedIdeas, setSavedIdeas] = useState([]);
@@ -99,7 +102,10 @@ export default function Home() {
           style: selectedStyle,
           mode: mode,
           intensity: intensity,
-          changes: selectedChanges
+          changes: selectedChanges,
+          cabinetColor: cabinetColor,
+          countertopMaterial: countertopMaterial,
+          wallColor: wallColor
         })
       });
 
@@ -409,6 +415,93 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
+              )}
+
+              {mode === 'remodel' && (
+                <>
+                  <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+                    <h2 className="text-lg font-semibold text-slate-800 mb-4">🎨 Cabinet Color</h2>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { value: 'white', label: 'White', color: '#FFFFFF' },
+                        { value: 'navy', label: 'Navy Blue', color: '#1E3A8A' },
+                        { value: 'gray', label: 'Gray', color: '#6B7280' },
+                        { value: 'light-wood', label: 'Light Wood', color: '#D4A574' },
+                        { value: 'dark-wood', label: 'Dark Wood', color: '#3E2723' }
+                      ].map((color) => (
+                        <button
+                          key={color.value}
+                          onClick={() => setCabinetColor(color.value)}
+                          className={`p-3 rounded-xl border-2 transition-all ${
+                            cabinetColor === color.value
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-slate-200'
+                          }`}
+                        >
+                          <div 
+                            className="w-full h-8 rounded mb-2 border" 
+                            style={{backgroundColor: color.color}}
+                          />
+                          <div className="font-semibold text-xs text-slate-800">{color.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+                    <h2 className="text-lg font-semibold text-slate-800 mb-4">🪨 Countertop Material</h2>
+                    <div className="grid grid-cols-3 gap-3">
+                      {[
+                        { value: 'quartz', label: 'Quartz', emoji: '⬜' },
+                        { value: 'granite', label: 'Granite', emoji: '🪨' },
+                        { value: 'marble', label: 'Marble', emoji: '🤍' },
+                        { value: 'butcher-block', label: 'Butcher Block', emoji: '🟫' },
+                        { value: 'concrete', label: 'Concrete', emoji: '⬛' }
+                      ].map((material) => (
+                        <button
+                          key={material.value}
+                          onClick={() => setCountertopMaterial(material.value)}
+                          className={`p-3 rounded-xl border-2 transition-all ${
+                            countertopMaterial === material.value
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-slate-200'
+                          }`}
+                        >
+                          <div className="text-2xl mb-1">{material.emoji}</div>
+                          <div className="font-semibold text-xs text-slate-800">{material.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+                    <h2 className="text-lg font-semibold text-slate-800 mb-4">🖌️ Wall Color</h2>
+                    <div className="grid grid-cols-4 gap-3">
+                      {[
+                        { value: 'white', label: 'White', color: '#FFFFFF' },
+                        { value: 'gray', label: 'Gray', color: '#9CA3AF' },
+                        { value: 'beige', label: 'Beige', color: '#D4C4B0' },
+                        { value: 'blue', label: 'Blue-Gray', color: '#94A3B8' }
+                      ].map((wall) => (
+                        <button
+                          key={wall.value}
+                          onClick={() => setWallColor(wall.value)}
+                          className={`p-3 rounded-xl border-2 transition-all ${
+                            wallColor === wall.value
+                              ? 'border-blue-500 bg-blue-50'
+                              : 'border-slate-200'
+                          }`}
+                        >
+                          <div 
+                            className="w-full h-8 rounded mb-2 border" 
+                            style={{backgroundColor: wall.color}}
+                          />
+                          <div className="font-semibold text-xs text-slate-800">{wall.label}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
 
               {selectedStyle && (
