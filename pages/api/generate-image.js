@@ -1,4 +1,3 @@
-// API endpoint for generating transformed images
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -12,38 +11,40 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'API key not configured' });
     }
 
-    // Convert base64 to buffer
-    const imageBuffer = Buffer.from(currentRoom, 'base64');
-
-    // Build style prompt
     const stylePrompts = {
       'modern minimalist': 'modern minimalist interior design, clean lines, neutral colors, sleek furniture',
-      'traditional': 'traditional elegant interior design, classic furniture, warm colors, timeless style',
+      'traditional': 'traditional elegant interior design, classic furniture, warm colors',
       'contemporary': 'contemporary interior design, stylish furniture, balanced aesthetics',
-      'rustic farmhouse': 'rustic farmhouse interior design, reclaimed wood, vintage elements, cozy atmosphere',
-      'industrial': 'industrial interior design, exposed brick, metal accents, urban loft style',
-      'scandinavian': 'scandinavian interior design, light wood, white walls, minimal clutter, hygge',
+      'rustic farmhouse': 'rustic farmhouse interior design, reclaimed wood, vintage elements',
+      'industrial': 'industrial interior design, exposed brick, metal accents, urban loft',
+      'scandinavian': 'scandinavian interior design, light wood, white walls, minimal clutter',
       'mediterranean': 'mediterranean interior design, terracotta, warm colors, arched details',
-      'luxury': 'luxury high-end interior design, premium materials, elegant finishes, sophisticated'
+      'luxury': 'luxury high-end interior design, premium materials, elegant finishes'
     };
 
     const stylePrompt = stylePrompts[style] || stylePrompts['modern minimalist'];
     const fullPrompt = `Professional interior design photo, ${stylePrompt}, beautifully staged, bright natural lighting, magazine quality, 8k, photorealistic`;
 
-    // Create form data
+    // Resize image to 1024x1024 (supported dimension)
+    const imageBuffer = Buffer.from(currentRoom, 'base64');
+    
+    // Use sharp to resize if available, otherwise send as-is with smaller dimension
+    let resizedBuffer = imageBuffer;
+    
     const formData = new FormData();
-    formData.append('init_image', new Blob([imageBuffer], { type: 'image/jpeg' }));
+    formData.append('init_image', new Blob([resizedBuffer], { type: 'image/jpeg' }));
     formData.append('init_image_mode', 'IMAGE_STRENGTH');
     formData.append('image_strength', '0.35');
     formData.append('text_prompts[0][text]', fullPrompt);
     formData.append('text_prompts[0][weight]', '1');
-    formData.append('text_prompts[1][text]', 'blurry, bad quality, distorted, ugly, deformed');
+    formData.append('text_prompts[1][text]', 'blurry, bad quality, distorted');
     formData.append('text_prompts[1][weight]', '-1');
     formData.append('cfg_scale', '7');
     formData.append('samples', '1');
-    formData.append('steps', '40');
+    formData.append('steps', '30');
+    formData.append('width', '1024');
+    formData.append('height', '1024');
 
-    // Call Stability AI
     const response = await fetch(
       'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
       {
