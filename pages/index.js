@@ -34,28 +34,51 @@ export default function Home() {
       img.src = e.target.result;
       
       img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-        const maxSize = 1024;
+        // Allowed dimensions for Stable Diffusion XL
+        const allowedDimensions = [
+          [1024, 1024],
+          [1152, 896],
+          [1216, 832],
+          [1344, 768],
+          [1536, 640],
+          [640, 1536],
+          [768, 1344],
+          [832, 1216],
+          [896, 1152]
+        ];
         
-        if (width > height) {
-          if (width > maxSize) {
-            height = (height * maxSize) / width;
-            width = maxSize;
-          }
-        } else {
-          if (height > maxSize) {
-            width = (width * maxSize) / height;
-            height = maxSize;
+        // Calculate aspect ratio of uploaded image
+        const aspectRatio = img.width / img.height;
+        
+        // Find closest allowed dimension that matches aspect ratio
+        let bestMatch = allowedDimensions[0];
+        let bestDiff = Math.abs((allowedDimensions[0][0] / allowedDimensions[0][1]) - aspectRatio);
+        
+        for (const dim of allowedDimensions) {
+          const dimRatio = dim[0] / dim[1];
+          const diff = Math.abs(dimRatio - aspectRatio);
+          if (diff < bestDiff) {
+            bestDiff = diff;
+            bestMatch = dim;
           }
         }
         
+        const [width, height] = bestMatch;
+        
+        // Create canvas with the best matching allowed dimensions
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         
-        ctx.drawImage(img, 0, 0, width, height);
+        // Draw image - slight crop may occur but NO squishing
+        const scale = Math.max(width / img.width, height / img.height);
+        const scaledWidth = img.width * scale;
+        const scaledHeight = img.height * scale;
+        const x = (width - scaledWidth) / 2;
+        const y = (height - scaledHeight) / 2;
+        
+        ctx.drawImage(img, x, y, scaledWidth, scaledHeight);
         
         const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
         setCurrentRoomImage(resizedDataUrl);
