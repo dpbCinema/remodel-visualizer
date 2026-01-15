@@ -24,17 +24,37 @@ export default function Home() {
     }
   }, []);
 
-  const handleCurrentRoomUpload = (event) => {
+ const handleCurrentRoomUpload = (event) => {
     const file = event.target.files[0];
     if (!file) return;
 
+    // Create image element to resize
+    const img = new Image();
     const reader = new FileReader();
-    reader.onload = (e) => setCurrentRoomImage(e.target.result);
+    
+    reader.onload = (e) => {
+      img.src = e.target.result;
+      
+      img.onload = () => {
+        // Create canvas to resize to 1024x1024
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        
+        // Draw resized image
+        ctx.drawImage(img, 0, 0, 1024, 1024);
+        
+        // Get resized image as data URL
+        const resizedDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        setCurrentRoomImage(resizedDataUrl);
+        
+        // Get base64 for API
+        setCurrentRoomData(resizedDataUrl.split(',')[1]);
+      };
+    };
+    
     reader.readAsDataURL(file);
-
-    const base64Reader = new FileReader();
-    base64Reader.onload = (e) => setCurrentRoomData(e.target.result.split(',')[1]);
-    base64Reader.readAsDataURL(file);
   };
 
   const handleInspirationUpload = (event) => {
